@@ -1,0 +1,56 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Class {
+  WARRIOR
+  MAGE
+  ARCHER
+  ROGUE
+  BARD
+}
+
+enum ItemType {
+  WEAPON
+  ARMOR
+  AMULET
+}
+
+model Character {
+  id Int @id @default(autoincrement()) @map("character_id")
+  name String @db.VarChar(150) @map("character_name")
+  adventurer_pseudonym String @db.VarChar(150) @map("character_adventurer_pseudonym")
+  class Class @map("character_class")
+  level Int @default(1) @map("character_level") 
+  strenght_points Int @db.Integer @map("character_strenght")
+  defense_points  Int @db.Integer @map("character_defense")
+  backpack MagicItem[]
+
+  @@index([adventurer_pseudonym, class])
+  @@map("tb_characters")
+}
+
+model MagicItem {
+  id Int @id @default(autoincrement()) @map("item_id")
+  name String @db.VarChar(150) @map("item_name")
+  item_type ItemType @map("item_type")
+  strenght_points Int @db.Integer @map("item_strenght")
+  defense_points Int @db.Integer @map("item_defense")
+  
+  CharacterId Int
+  Character Character @relation(fields: [CharacterId], references: [id]) 
+
+  @@index([name, item_type])
+  @@map("tb_items")
+}
