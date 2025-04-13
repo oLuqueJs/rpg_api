@@ -1,5 +1,19 @@
-import { IsEnum, IsInt, IsNumber, IsString, Max, max, MaxLength } from "class-validator";
+import { IsEnum, IsInt, IsString, Max, MaxLength, Min, Validate, ValidateIf } from "class-validator";
 import { Class } from "@prisma/client";
+import { Type } from "class-transformer";
+import { CreateItemDto } from "src/modules/items/dto/create-item.dto";
+
+export class AttributesSumValidator {
+  validate(value: number, args: any) {
+    const obj = args.object;
+    const sum = (obj.strength_points || 0) + (obj.defense_points || 0);
+    return sum <= 10;
+  }
+
+  defaultMessage() {
+    return 'The sum of strength and defense points must not exceed 10';
+  }
+}
 
 export class CreateCharacterDto {
   @IsString()
@@ -14,12 +28,18 @@ export class CreateCharacterDto {
   class: Class;
 
   @IsInt()
+  @Min(0)
   @Max(10)
-  strenght_points: number;
+  @Validate(AttributesSumValidator)
+  strength_points: number;
 
   @IsInt()
+  @Min(0)
   @Max(10)
+  @Validate(AttributesSumValidator)
   defense_points: number;
 
-  backpack: any //TODO: MAGIC ITEMS HERE
+  @ValidateIf(o => o.backpack && o.backpack.length > 0)
+  @Type(() => CreateItemDto)
+  backpack?: CreateItemDto[];
 }

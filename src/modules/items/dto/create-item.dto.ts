@@ -1,19 +1,26 @@
 import { ItemType } from "@prisma/client";
-import { IsEnum, IsInt, IsString, Max, MaxLength } from "class-validator";
+import { IsEnum, IsInt, IsNotEmpty, IsString, Max, MaxLength, Min, ValidateIf } from "class-validator";
 
 export class CreateItemDto {
   @IsString()
   @MaxLength(150)
-  name: String
+  @IsNotEmpty()
+  name: string;
 
   @IsEnum(ItemType)
-  item_type: ItemType
+  item_type: ItemType;
 
   @IsInt()
+  @Min(0)
   @Max(10)
-  strenght_points: number;
+  @ValidateIf(o => o.item_type !== 'ARMOR')
+  strength_points: number = 0;
 
   @IsInt()
+  @Min(0)
   @Max(10)
-  defense_points: number;
+  @ValidateIf(o => o.item_type !== 'WEAPON')
+  defense_points: number = 0;
+
+  character_id?: number;
 }
