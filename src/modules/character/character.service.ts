@@ -1,20 +1,24 @@
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
-import { PrismaService } from "src/common/prisma/prisma.service";
-import { CreateCharacterDto } from "../dto/create-character.dto";
-import { ResponseCharacterDto } from "../dto/response-character.dto";
-import { UpdateCharacterDto } from "../dto/update-character.dto";
-import { plainToClass } from "class-transformer";
-import { CreateItemDto } from "src/modules/items/dto/create-item.dto";
-import { ResponseItemDto } from "src/modules/items/dto/response-item.dto";
-import { ItemType } from "@prisma/client";
+import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { PrismaService } from 'src/common/prisma/prisma.service';
+import { CreateCharacterDto } from './dto/create-character.dto';
+import { UpdateCharacterDto } from './dto/update-character.dto';
+import { ResponseCharacterDto } from './dto/response-character.dto';
+import { plainToClass } from 'class-transformer';
+import { CreateItemDto } from '../items/dto/create-item.dto';
+import { ResponseItemDto } from '../items/dto/response-item.dto';
+import { ItemType } from '@prisma/client';
 
 @Injectable()
-export class CharacterRepository {
+export class CharacterService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Create a new character
+   */
   async create(createCharacterDto: CreateCharacterDto): Promise<ResponseCharacterDto> {
     try {
       const { strength_points, defense_points } = createCharacterDto;
+      
       if (strength_points + defense_points !== 10) {
         throw new BadRequestException('The sum of strength and defense points must be exactly 10');
       }
@@ -37,10 +41,13 @@ export class CharacterRepository {
       if (error instanceof BadRequestException) {
         throw error;
       }
-      throw new InternalServerErrorException("Failed to create character");
+      throw new InternalServerErrorException(`Failed to create character: ${error.message}`);
     }
   }
 
+  /**
+   * Find all characters
+   */
   async findAll(): Promise<ResponseCharacterDto[]> {
     try {
       const characters = await this.prisma.character.findMany({
@@ -51,23 +58,24 @@ export class CharacterRepository {
       
       return characters.map(character => plainToClass(ResponseCharacterDto, character));
     } catch (error) {
-      throw new InternalServerErrorException("Failed to fetch characters");
+      throw new InternalServerErrorException(`Failed to fetch characters: ${error.message}`);
     }
   }
 
-  async findOne(characterId: number): Promise<ResponseCharacterDto | null> {
+  /**
+   * Find one character by id
+   */
+  async findOne(id: number): Promise<ResponseCharacterDto> {
     try {
       const character = await this.prisma.character.findUnique({
-        where: {
-          id: characterId,
-        },
+        where: { id },
         include: {
           backpack: true,
         },
       });
       
       if (!character) {
-        throw new NotFoundException(`Character with ID ${characterId} not found`);
+        throw new NotFoundException(`Character with ID ${id} not found`);
       }
       
       return plainToClass(ResponseCharacterDto, character);
@@ -75,23 +83,26 @@ export class CharacterRepository {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new InternalServerErrorException("Failed to fetch character");
+      throw new InternalServerErrorException(`Failed to fetch character: ${error.message}`);
     }
   }
 
-  async update(updateCharacterDto: UpdateCharacterDto, characterId: number): Promise<ResponseCharacterDto> {
+  /**
+   * Update a character by id
+   */
+  async update(id: number, updateCharacterDto: UpdateCharacterDto): Promise<ResponseCharacterDto> {
     try {
-      const currentCharacter = await this.prisma.character.findUnique({
-        where: { id: characterId },
+      const character = await this.prisma.character.findUnique({
+        where: { id },
       });
       
-      if (!currentCharacter) {
-        throw new NotFoundException(`Character with ID ${characterId} not found`);
+      if (!character) {
+        throw new NotFoundException(`Character with ID ${id} not found`);
       }
       
       if (updateCharacterDto.strength_points !== undefined || updateCharacterDto.defense_points !== undefined) {
-        const newStrength = updateCharacterDto.strength_points ?? currentCharacter.strength_points;
-        const newDefense = updateCharacterDto.defense_points ?? currentCharacter.defense_points;
+        const newStrength = updateCharacterDto.strength_points ?? character.strength_points;
+        const newDefense = updateCharacterDto.defense_points ?? character.defense_points;
         
         if (newStrength + newDefense !== 10) {
           throw new BadRequestException('The sum of strength and defense points must be exactly 10');
@@ -101,9 +112,7 @@ export class CharacterRepository {
       const { backpack, ...updateData } = updateCharacterDto;
       
       const updatedCharacter = await this.prisma.character.update({
-        where: {
-          id: characterId
-        },
+        where: { id },
         data: updateData,
         include: {
           backpack: true,
@@ -115,33 +124,69 @@ export class CharacterRepository {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
-      throw new InternalServerErrorException("Failed to update character");
+      throw new InternalServerErrorException(`Failed to update character: ${error.message}`);
     }
   }
 
-  async delete(characterId: number): Promise<void> {
+  /**
+   * Update only the adventurer_pseudonym of a character
+   */
+  async updateAdventurerPseudonym(id: number, pseudonym: string): Promise<ResponseCharacterDto> {
     try {
       const character = await this.prisma.character.findUnique({
-        where: { id: characterId },
+        where: { id },
       });
       
       if (!character) {
-        throw new NotFoundException(`Character with ID ${characterId} not found`);
+        throw new NotFoundException(`Character with ID ${id} not found`);
+      }
+      
+      const updatedCharacter = await this.prisma.character.update({
+        where: { id },
+        data: {
+          adventurer_pseudonym: pseudonym,
+        },
+        include: {
+          backpack: true,
+        },
+      });
+      
+      return plainToClass(ResponseCharacterDto, updatedCharacter);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(`Failed to update character pseudonym: ${error.message}`);
+    }
+  }
+
+  /**
+   * Delete a character
+   */
+  async remove(id: number): Promise<void> {
+    try {
+      const character = await this.prisma.character.findUnique({
+        where: { id },
+      });
+      
+      if (!character) {
+        throw new NotFoundException(`Character with ID ${id} not found`);
       }
       
       await this.prisma.character.delete({
-        where: {
-          id: characterId
-        }
+        where: { id },
       });
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new InternalServerErrorException("Failed to delete character");
+      throw new InternalServerErrorException(`Failed to delete character: ${error.message}`);
     }
   }
 
+  /**
+   * Add a magic item to a character
+   */
   async addItemToCharacter(characterId: number, createItemDto: CreateItemDto): Promise<ResponseItemDto> {
     try {
       const character = await this.prisma.character.findUnique({
@@ -153,7 +198,7 @@ export class CharacterRepository {
         throw new NotFoundException(`Character with ID ${characterId} not found`);
       }
       
-      this.validateItem(createItemDto);
+      this.validateItemRules(createItemDto);
       
       if (createItemDto.item_type === ItemType.AMULET) {
         const hasAmulet = character.backpack.some(item => item.item_type === ItemType.AMULET);
@@ -177,10 +222,13 @@ export class CharacterRepository {
       if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof ConflictException) {
         throw error;
       }
-      throw new InternalServerErrorException("Failed to add item to character");
+      throw new InternalServerErrorException(`Failed to add item to character: ${error.message}`);
     }
   }
 
+  /**
+   * List all items of a character
+   */
   async findCharacterItems(characterId: number): Promise<ResponseItemDto[]> {
     try {
       const character = await this.prisma.character.findUnique({
@@ -197,10 +245,13 @@ export class CharacterRepository {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new InternalServerErrorException("Failed to fetch character items");
+      throw new InternalServerErrorException(`Failed to fetch character items: ${error.message}`);
     }
   }
 
+  /**
+   * Find a character's amulet
+   */
   async findCharacterAmulet(characterId: number): Promise<ResponseItemDto | null> {
     try {
       const character = await this.prisma.character.findUnique({
@@ -225,10 +276,13 @@ export class CharacterRepository {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new InternalServerErrorException("Failed to fetch character amulet");
+      throw new InternalServerErrorException(`Failed to fetch character amulet: ${error.message}`);
     }
   }
 
+  /**
+   * Remove an item from a character
+   */
   async removeItemFromCharacter(characterId: number, itemId: number): Promise<void> {
     try {
       const item = await this.prisma.magicItem.findFirst({
@@ -249,11 +303,46 @@ export class CharacterRepository {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new InternalServerErrorException("Failed to remove item from character");
+      throw new InternalServerErrorException(`Failed to remove item from character: ${error.message}`);
     }
   }
 
-  private validateItem(item: CreateItemDto): void {
+  /**
+   * Level up a character
+   */
+  async levelUp(characterId: number): Promise<ResponseCharacterDto> {
+    try {
+      const character = await this.prisma.character.findUnique({
+        where: { id: characterId },
+      });
+      
+      if (!character) {
+        throw new NotFoundException(`Character with ID ${characterId} not found`);
+      }
+      
+      const updatedCharacter = await this.prisma.character.update({
+        where: { id: characterId },
+        data: {
+          level: { increment: 1 }
+        },
+        include: {
+          backpack: true,
+        },
+      });
+      
+      return plainToClass(ResponseCharacterDto, updatedCharacter);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(`Failed to level up character: ${error.message}`);
+    }
+  }
+
+  /**
+   * Validate rules for magic items based on their type
+   */
+  private validateItemRules(item: CreateItemDto): void {
     if (item.strength_points === 0 && item.defense_points === 0) {
       throw new BadRequestException('Item cannot have zero strength and zero defense');
     }
@@ -264,6 +353,14 @@ export class CharacterRepository {
     
     if (item.item_type === ItemType.ARMOR && item.strength_points !== 0) {
       throw new BadRequestException('Armor must have zero strength');
+    }
+    
+    if (item.strength_points < 0 || item.strength_points > 10) {
+      throw new BadRequestException('Strength points must be between 0 and 10');
+    }
+    
+    if (item.defense_points < 0 || item.defense_points > 10) {
+      throw new BadRequestException('Defense points must be between 0 and 10');
     }
   }
 }
